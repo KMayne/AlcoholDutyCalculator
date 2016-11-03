@@ -12,7 +12,7 @@ main = do
   putStrLn "What is the volume in cL?"
   vol <- fmap read getLine
   duty <- beverageDuty beverage abv vol
-  printf "The duty on a %.1v cL %.2v%% bottle of %s is £%.2v" vol abv (map toLower (show beverage)) duty
+  printf "The duty on a %.1v cL %.2v%% bottle of %s is £%.2v\n" vol abv (map toLower (show beverage)) duty
 
 requestBeverageType :: IO Beverage
 requestBeverageType = userSelectFromList "beverage type" beverages
@@ -23,14 +23,15 @@ userSelectFromList :: (Show a, Enum a) => String -> [a] -> IO a
 userSelectFromList listItemName list = do
   putStrLn ("Select a " ++ listItemName ++ ":")
   (sequence_ . generateOptionListPrints) list
-  option <- fmap ((flip (-) (ord 'A')) . ord . toUpper . (flip (!!) 0)) getLine
+  input <- getLine
+  let option = (ord . toUpper) (input !! 0) - ord 'A' in do
   if option >= 0 && option < length list
     then return (toEnum option)
     else do
       putStrLn ("Please type an option from A to " ++ [lastOption])
       userSelectFromList listItemName list
   where
-    lastOption = chr (ord 'A' + length list)
+    lastOption = chr (ord 'A' + length list - 1)
 
 generateOptionListPrints :: Show a => [a] -> [IO ()]
 generateOptionListPrints
@@ -39,16 +40,16 @@ generateOptionListPrints
     makeOptionString = (zipWith (\letter opt -> letter:") " ++ opt) ['A'..'Z'])
 
 beverageDuty :: Beverage -> Double -> Double -> IO Double
-beverageDuty Beer   abv vol = return $ beerDuty abv vol
-beverageDuty Cider  abv vol = do f <- (co2BeverageDuty ciderDuty); return $ f abv vol
-beverageDuty Perry  abv vol = beverageDuty Cider abv vol
-beverageDuty Spirit abv vol = return $ spiritDuty abv vol
-beverageDuty Wine   abv vol = do f <- (co2BeverageDuty wineDuty);  return $ f abv vol
+beverageDuty Beer   = return .: beerDuty
+beverageDuty Cider  = co2BeverageDuty ciderDuty
+beverageDuty Perry  = beverageDuty Cider abv vol
+beverageDuty Spirit = return .: spiritDuty
+beverageDuty Wine   = co2BeverageDuty wineDuty
 
-co2BeverageDuty :: (Carbonation -> Double -> Double -> Double) -> IO (Double -> Double -> Double)
+co2BeverageDuty :: (Carbonation -> Double -> Double -> Double) -> Double -> Double -> IO (Double)
 co2BeverageDuty dutyFunc = do
   carbonation <- userSelectFromList "carbonation option" carbonations
-  return (dutyFunc carbonation)
+  return . (dutyFunc carbonation)
   where
     carbonations = [minBound :: Carbonation ..]
 
@@ -69,8 +70,9 @@ ciderDuty Sparkling abv
 
 spiritDuty :: Double -> Double -> Double
 spiritDuty abv volume
-  = volume / 100 * abv / 100 * ratePerLitreOfEthanol
+  = volume / centilitresPerLitre * abv / 100 * ratePerLitreOfEthanol
   where
+    centilitresPerLitre   = 100
     ratePerLitreOfEthanol = 27.66
 
 wineDuty :: Carbonation -> Double -> Double -> Double
@@ -87,4 +89,9 @@ wineDuty Sparkling abv
 
 hectoLitreDuty :: Double -> Double -> Double
 hectoLitreDuty ratePerHectoLitre amountInCentiLitres
-  = amountInCentiLitres / 10000 * ratePerHectoLitre
+  = amountInCentiLitres / centilitersInHectoLitre * ratePerHectoLitre
+  where
+    centilitersInHectoLitre = 100 * 100
+    
+(.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
+(f .: g) x y = f (g x y)
