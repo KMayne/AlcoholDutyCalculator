@@ -1,4 +1,5 @@
 import Data.Char
+import Data.List
 import Text.Printf
 
 data Beverage = Beer | Cider | Perry | Spirit | Wine deriving (Enum, Show, Bounded)
@@ -15,26 +16,6 @@ main = do
   printf "The duty on a %.1v cL %.2v%% bottle of %s is £%.2v\n" vol abv (map toLower (show beverage)) duty
   where
     beverages = [minBound :: Beverage ..]
-
-userSelectFromList :: (Show a, Enum a) => String -> [a] -> IO a
-userSelectFromList listItemName list = do
-  putStrLn ("Select a " ++ listItemName ++ ":")
-  (sequence_ . generateOptionListPrints) list
-  input <- getLine
-  let option = (ord . toUpper) (input !! 0) - ord 'A' in do
-  if option >= 0 && option < length list
-    then return (toEnum option)
-    else do
-      putStrLn ("Please type an option from A to " ++ [lastOption])
-      userSelectFromList listItemName list
-  where
-    lastOption = chr (ord 'A' + length list - 1)
-
-generateOptionListPrints :: Show a => [a] -> [IO ()]
-generateOptionListPrints
-  = (map putStrLn) . makeOptionString . (map show)
-  where
-    makeOptionString = (zipWith (\letter opt -> letter:") " ++ opt) ['A'..'Z'])
 
 beverageDuty :: Beverage -> Double -> Double -> IO Double
 beverageDuty Perry  = beverageDuty Cider
@@ -65,13 +46,6 @@ ciderDuty Sparkling abv
   | abv > 8.5 = hectoLitreDuty 268.99
   | abv > 1.2 = hectoLitreDuty  38.87
 
-spiritDuty :: Double -> Double -> Double
-spiritDuty abv volume
-  = volume / centilitresPerLitre * abv / 100 * ratePerLitreOfEthanol
-  where
-    centilitresPerLitre   = 100
-    ratePerLitreOfEthanol = 27.66
-
 wineDuty :: Carbonation -> Double -> Double -> Double
 wineDuty Still abv
   | abv > 22  = spiritDuty abv
@@ -90,5 +64,35 @@ hectoLitreDuty ratePerHectoLitre amountInCentiLitres
   where
     centilitersInHectoLitre = 100 * 100
 
+spiritDuty :: Double -> Double -> Double
+spiritDuty abv volume
+  = volume / centilitresPerLitre * abv / 100 * ratePerLitreOfEthanol
+  where
+    centilitresPerLitre   = 100
+    ratePerLitreOfEthanol = 27.66
+
+userSelectFromList :: (Show a, Enum a) => String -> [a] -> IO a
+userSelectFromList listItemName list = do
+  putStrLn ("Select a " ++ listItemName ++ ":")
+  -- Print options
+  mapM putStrLn ((makeOptionStrings . map show) list)
+  -- Get a choice from the user
+  item <- validPrompt ("Please type an option from A to " ++ [lastOption]) validInput
+  return ((toEnum . getOptNum) item)
+  where
+    validInput input = length input /= 0 &&
+      let option = getOptNum input in 0 <= option && option < length list
+    getOptNum input = (ord . toUpper . head) input - ord 'A'
+    lastOption = chr (ord 'A' + length list - 1)
+    makeOptionStrings = (zipWith (\letter opt -> letter:") " ++ opt) ['A'..'Z'])
+
 (.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
-(f .: g) x y = f (g x y)
+(f .: g) x y = f $ g x y
+
+validPrompt :: String -> (String -> Bool) -> IO String
+validPrompt message validateInput = do
+  putStrLn message
+  input <- getLine
+  if validateInput input
+    then return input
+    else validPrompt message validateInput
