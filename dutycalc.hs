@@ -6,16 +6,13 @@ data Carbonation = Still | Sparkling deriving (Enum, Show, Bounded)
 
 main :: IO ()
 main = do
-  beverage <- requestBeverageType
+  beverage <- userSelectFromList "beverage type" beverages
   putStrLn "What is the ABV in %?"
   abv <- fmap read getLine
   putStrLn "What is the volume in cL?"
   vol <- fmap read getLine
   duty <- beverageDuty beverage abv vol
   printf "The duty on a %.1v cL %.2v%% bottle of %s is £%.2v\n" vol abv (map toLower (show beverage)) duty
-
-requestBeverageType :: IO Beverage
-requestBeverageType = userSelectFromList "beverage type" beverages
   where
     beverages = [minBound :: Beverage ..]
 
@@ -40,16 +37,16 @@ generateOptionListPrints
     makeOptionString = (zipWith (\letter opt -> letter:") " ++ opt) ['A'..'Z'])
 
 beverageDuty :: Beverage -> Double -> Double -> IO Double
+beverageDuty Perry  = beverageDuty Cider
 beverageDuty Beer   = return .: beerDuty
 beverageDuty Cider  = co2BeverageDuty ciderDuty
-beverageDuty Perry  = beverageDuty Cider abv vol
 beverageDuty Spirit = return .: spiritDuty
 beverageDuty Wine   = co2BeverageDuty wineDuty
 
 co2BeverageDuty :: (Carbonation -> Double -> Double -> Double) -> Double -> Double -> IO (Double)
-co2BeverageDuty dutyFunc = do
+co2BeverageDuty dutyFunc abv vol = do
   carbonation <- userSelectFromList "carbonation option" carbonations
-  return . (dutyFunc carbonation)
+  return (dutyFunc carbonation abv vol)
   where
     carbonations = [minBound :: Carbonation ..]
 
@@ -92,6 +89,6 @@ hectoLitreDuty ratePerHectoLitre amountInCentiLitres
   = amountInCentiLitres / centilitersInHectoLitre * ratePerHectoLitre
   where
     centilitersInHectoLitre = 100 * 100
-    
+
 (.:) :: (c -> d) -> (a -> b -> c) -> a -> b -> d
 (f .: g) x y = f (g x y)
